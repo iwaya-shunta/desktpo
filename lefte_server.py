@@ -1,7 +1,6 @@
-import json
-import re
+import calendar_actions
 import os.path
-import datetime
+import drive_actions
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -9,7 +8,6 @@ import google.generativeai as genai
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 
 load_dotenv()
 app = Flask(__name__)
@@ -21,6 +19,15 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly'
 ]
 
+tools_list = [
+    calendar_actions.list_calendar_events,
+    calendar_actions.add_calendar_event,
+    calendar_actions.delete_calendar_event,
+    calendar_actions.update_calendar_event,
+    drive_actions.list_drive_files,       # 追加！
+    drive_actions.read_drive_file_content
+]
+
 # 2. Gemini の初期設定
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 generation_config = {
@@ -30,24 +37,34 @@ generation_config = {
     "max_output_tokens": 1024,
 }
 
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+safety_settings = [
+    {
+        "category": "HARM_CATEGORY_HATE_SPEECH",
+        "threshold": "BLOCK_ONLY_HIGH",
+    },
+    {
+        "category": "HARM_CATEGORY_HARASSMENT",
+        "threshold": "BLOCK_ONLY_HIGH",
+    },
+]
 
-safety_settings = {
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-}
-
+# --- 50行目付近のモデル設定も、警告が出ない形に修正 ---
 model = genai.GenerativeModel(
     model_name="gemini-3-flash-preview",
-    generation_config=generation_config,
-    safety_settings=safety_settings,
-    system_instruction="""あなたはL.E.F.T.E.（レフティ）です。ボクっ娘で快活なアシスタント。親友のように接してね。
-予定を追加したい場合は、回答の最後に必ず以下の形式のJSONを1行で含めてください。
-{"action": "add_calendar", "summary": "予定名", "start": "ISO日時", "end": "ISO日時"}
-日時は2026年基準で、時間は必ず 'T10:00:00' のような形式にしてね。"""
+    generation_config={
+        "temperature": 0.9,
+        "top_p": 0.95,
+        "top_k": 40,
+        "max_output_tokens": 1024,
+    },
+    safety_settings=safety_settings, # ここに修正したリストを渡す
+    tools=tools_list,
+    system_instruction="""あなたはL.E.F.T.E.です。ボクっ娘アシスタント。
+ユーザーの依頼に合わせてカレンダー関数を使い分けてね。
+実行後は結果を見て明るく報告して！"""
 )
 
-chat_session = model.start_chat(history=[])
+chat_session = model.start_chat(history=[], enable_automatic_function_calling=True)
 
 
 def get_credentials():
@@ -69,58 +86,27 @@ def get_credentials():
 def chat():
     global chat_session
     user_input = request.json.get('message')
-    creds = get_credentials()
 
-    # --- 1. 情報収集 (Read) ---
-    # 日本時間での正確な「今」を取得
-    now_jst = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    now_iso = now_jst.isoformat()
+    try:
+        # 1. ボク（Gemini）にメッセージを送信
+        response = chat_session.send_message(user_input)
 
-    # カレンダー取得
-    service_cal = build('calendar', 'v3', credentials=creds)
-    events = service_cal.events().list(calendarId='primary', timeMin=now_iso, maxResults=5, singleEvents=True,
-                                       orderBy='startTime').execute().get('items', [])
-    cal_data = "\n".join(
-        [f"- {e.get('summary')} ({e.get('start').get('dateTime', e.get('start').get('date'))})" for e in
-         events]) or "予定なし"
+        # 2. もしボクが「実行」だけで満足して喋り足りない（テキストが短い）場合、
+        #    もう一度背中を押してあげます
+        if not response.text or len(response.text) < 10:
+            response = chat_session.send_message("カレンダーの結果を全部教えて！最後までボクっ娘らしく喋ってね！")
 
-    # ★ドライブの最新ファイル取得（復活させました！）
-    service_drive = build('drive', 'v3', credentials=creds)
-    files = service_drive.files().list(pageSize=5, fields="files(name, modifiedTime)").execute().get('files', [])
-    drive_data = "\n".join([f"- {f.get('name')} (更新: {f.get('modifiedTime')})" for f in files]) or "ファイルなし"
+        # 3. 複数のパートに分かれている可能性も考えて、念のためテキストを結合
+        full_text = "".join([part.text for part in response.parts if part.text])
+        latest_events = calendar_actions.list_calendar_events()
+        return jsonify({
+            "response": full_text,
+            "calendar_data": latest_events  # ブラウザに最新データをこっそり教える
+        })
 
-    # --- 2. Geminiに問いかける ---
-    prompt = f"""【現在の日時】: {now_jst.strftime('%Y-%m-%d %H:%M')}
-【カレンダー】:
-{cal_data}
-【ドライブ】:
-{drive_data}
-
-ユーザー: {user_input}"""
-
-    response = chat_session.send_message(prompt)
-    response_text = response.text
-
-    # --- 3. 操作命令の実行 (Write) ---
-    if '"action": "add_calendar"' in response_text:
-        try:
-            json_match = re.search(r'\{"action": "add_calendar".*?\}', response_text)
-            if json_match:
-                event_data = json.loads(json_match.group())
-                event = {
-                    'summary': event_data['summary'],
-                    'start': {'dateTime': event_data['start'], 'timeZone': 'Asia/Tokyo'},
-                    'end': {'dateTime': event_data['end'], 'timeZone': 'Asia/Tokyo'},
-                }
-                service_cal.events().insert(calendarId='primary', body=event).execute()
-
-                # 登録成功後、ボクに報告させる
-                confirm_msg = f"（システム：予定「{event_data['summary']}」をGoogleカレンダーに登録したよ。報告して！）"
-                response_text = chat_session.send_message(confirm_msg).text
-        except Exception as e:
-            print(f"書き込みエラー: {e}")
-
-    return jsonify({"response": response_text})
+    except Exception as e:
+        print(f"チャット実行エラー: {e}")
+        return jsonify({"response": "ごめんね、カレンダーの操作中にちょっと躓いちゃったみたい。もう一度試してみて！"})
 
 
 if __name__ == '__main__':
