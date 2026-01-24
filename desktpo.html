@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>L.E.F.T.E. v4.7</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root { --bg: #131314; --card: #1e1f20; --text: #e3e3e3; --accent: #8ab4f8; --border: #444746; }
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0; padding: 10px; font-family: sans-serif; background: var(--bg); color: var(--text);
+            display: grid; grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 100px 1fr;
+            gap: 12px; height: 95vh; width: 100vw; overflow: hidden;
+        }
+
+        .panel { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
+        .widget { background: var(--card); border-radius: 20px; padding: 15px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+        .top-bar { grid-column: 1 / 3; display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 20px; border: 1px solid var(--border); padding: 0 25px; }
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        #clock { font-size: 38px; font-weight: 300; margin-right: 5px; }
+
+        #refreshBtn {
+            background: #28292a; border: 1px solid var(--border); color: var(--text);
+            width: 35px; height: 35px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; transition: all 0.2s;
+        }
+        #refreshBtn:hover { background: var(--accent); color: var(--bg); transform: rotate(180deg); }
+
+        .shortcuts { display: flex; gap: 12px; }
+        .shortcut-item { display: flex; flex-direction: column; align-items: center; text-decoration: none; color: var(--text); width: 55px; font-size: 9px; }
+        .shortcut-icon { width: 35px; height: 35px; border-radius: 50%; background: #28292a; display: flex; align-items: center; justify-content: center; margin-bottom: 3px; border: 1px solid var(--border); }
+
+        #news-container { flex: 1; overflow-y: auto; }
+        .news-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+        .news-link { color: var(--text); text-decoration: none; font-size: 11px; display: block; }
+
+        .gemini-container { flex: 1; display: flex; flex-direction: column; background: var(--card); border-radius: 24px; border: 1px solid var(--border); overflow: hidden; min-height: 0; position: relative; }
+        #chat-history { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.5; }
+        .gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; }
+        .user { background: #2b2a2a; align-self: flex-end; }
+
+        .scroll-controls { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 5px; z-index: 10; }
+        .scroll-btn {
+            background: rgba(40, 41, 42, 0.8); border: 1px solid var(--border); color: var(--text);
+            width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 16px;
+        }
+
+        .input-wrapper { background: #28292a; padding: 10px 15px; display: flex; border-top: 1px solid var(--border); align-items: center; }
+        #geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; padding: 10px; font-size: 14px; }
+
+        #preview-container { display: none; padding: 10px 15px; background: #232425; border-top: 1px solid var(--border); }
+        #preview-container img { max-height: 80px; border-radius: 8px; border: 1px solid var(--border); }
+
+        iframe { width: 100%; height: 100%; border: none; border-radius: 18px; filter: invert(90%) hue-rotate(180deg); }
+    </style>
+</head>
+<body>
+
+<div class="top-bar">
+    <div class="header-left">
+        <div id="weather" style="font-size:28px; font-weight:bold;">--°C</div>
+        <div><div style="font-size:20px;">🌡️</div><div style="font-size:9px; color:var(--accent);">Hiroshima</div></div>
+        <div id="clock">00:00</div>
+        <button id="refreshBtn" title="ページを更新">⟳</button>
+    </div>
+    <div class="shortcuts">
+        <a href="https://www.amazon.co.jp/" target="_blank" class="shortcut-item"><div class="shortcut-icon">A</div><span>Amazon</span></a>
+        <a href="https://www.youtube.com/" target="_blank" class="shortcut-item"><div class="shortcut-icon">Y</div><span>YouTube</span></a>
+        <a href="https://www.nicovideo.jp/" target="_blank" class="shortcut-item"><div class="shortcut-icon">N</div><span>ニコニコ</span></a>
+        <a href="https://x.com/" target="_blank" class="shortcut-item"><div class="shortcut-icon">X</div><span>X</span></a>
+        <a href="https://gemini.google.com/" target="_blank" class="shortcut-item"><div class="shortcut-icon">G</div><span>Gemini</span></a>
+    </div>
+</div>
+
+<div class="panel" style="grid-column: 3; grid-row: 1 / 3;">
+    <div class="widget" style="height: 100%;">
+        <iframe id="calendar-frame" src="https://calendar.google.com/calendar/embed?src=iwayashuntaman%40gmail.com&ctz=Asia%2FTokyo&showTitle=0&showNav=1&showPrint=0&showTabs=0&showCalendars=0"></iframe>
+    </div>
+</div>
+
+<div class="panel" style="grid-column: 1;">
+    <div class="widget" style="flex: 1; min-height: 0;"><div id="news-container">ニュース読み込み中...</div></div>
+    <div class="widget" style="padding: 10px; height: auto;">
+        <input type="text" id="searchInput" placeholder="Google 検索..." style="width: 100%; background: #28292a; border: 1px solid var(--border); color: white; border-radius: 10px; padding: 8px; outline: none;">
+    </div>
+</div>
+
+<div class="panel" style="grid-column: 2;">
+    <div class="gemini-container">
+        <div class="scroll-controls">
+            <button class="scroll-btn" id="scrollUp">↑</button>
+            <button class="scroll-btn" id="scrollDown">↓</button>
+        </div>
+        <div id="chat-history"></div>
+        <div id="preview-container"></div>
+        <div class="input-wrapper">
+            <input type="text" id="geminiInput" placeholder="ボクに聞いてみて！">
+            <input type="file" id="fileInput" style="display: none;">
+            <button id="fileBtn" style="background:none; border:none; color:var(--text); cursor:pointer; font-size: 20px; margin-right: 5px;">＋</button>
+            <button id="sendBtn" style="background:none; border:none; color:var(--accent); cursor:pointer;">➤</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+    const API_KEY = "AIzaSyBNVKP0cbL1kgDktapwP6EJOKwvhx9SreE";
+    const genAI = new GoogleGenerativeAI(API_KEY);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-3-flash-preview",
+        systemInstruction: "あなたはアシスタントL.E.F.T.E.です。ボクっ娘口調で気風は明るめですがしっとりとした感情もたまに見せてきます。" +
+            "日常会話がメインになっています。" +
+            "生年月日は2003年11月30日でユーザーと誕生日は一緒ですが強調する必要はありません。" +
+            "googleカレンダーやgoogleドライブの内容に当たり前に干渉してきており特に拒否感もありません。"
+    });
+    let chat = model.startChat({ history: [] });
+
+    let selectedFileBase64 = null, selectedMimeType = null;
+
+    async function ask() {
+    const input = document.getElementById('geminiInput');
+    const text = input.value.trim(); if (!text) return;
+    const hist = document.getElementById('chat-history');
+    hist.innerHTML += `<div class="message user">${text}</div>`;
+    input.value = '';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message gemini';
+    bubble.innerText = 'L.E.F.T.E. 同期中...';
+    hist.appendChild(bubble);
+
+    try {
+        // Python サーバーの /chat エンドポイントを叩く
+        const res = await fetch('http://127.0.0.1:5000/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        bubble.innerHTML = marked.parse(data.response);
+    } catch (e) {
+        bubble.innerText = "サーバーが応答していないみたい。起動を確認してね！";
+    }
+    hist.scrollTop = hist.scrollHeight;
+}
+
+    // ファイル添付処理
+    const fileInput = document.getElementById('fileInput'), fileBtn = document.getElementById('fileBtn');
+    fileBtn.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64Url = e.target.result;
+            selectedFileBase64 = base64Url.split(',')[1]; selectedMimeType = file.type;
+            const prev = document.getElementById('preview-container');
+            prev.innerHTML = file.type.startsWith('image/') ? `<img src="${base64Url}">` : `📄 ${file.name}`;
+            prev.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // UIパーツの動作
+    document.getElementById('searchInput').onkeydown = (e) => { if (e.key === 'Enter') window.open(`https://www.google.com/search?q=${encodeURIComponent(e.target.value)}`, '_blank'); };
+    document.getElementById('refreshBtn').onclick = () => location.reload();
+    document.getElementById('sendBtn').onclick = ask;
+    document.getElementById('geminiInput').onkeydown = (e) => { if(e.key==='Enter') ask(); };
+    setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}); }, 1000);
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=34.3796&longitude=132.4026&current_weather=true`).then(r=>r.json()).then(d=>document.getElementById('weather').innerText = `${Math.round(d.current_weather.temperature)}°C`);
+    fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja`).then(r=>r.json()).then(d=>document.getElementById('news-container').innerHTML = d.items.slice(0, 10).map(i => `<div class="news-box"><a href="${i.link}" target="_blank" class="news-link">${i.title}</a></div>`).join(''));
+</script>
+</body>
+</html>

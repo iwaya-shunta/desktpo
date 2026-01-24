@@ -1,0 +1,10 @@
+# 秘密情報（絶対に公開しちゃダメ！）
+.env
+token.json
+credentials.json
+
+# Pythonのキャッシュ
+__pycache__/
+*.pyc
+
+.idea/
