@@ -1,4 +1,4 @@
-C:\Users\iwaya\Documents\htt\lefte_server.py:7: FutureWarning: 
+C:\Users\iwaya\Documents\htt\lefte_server.py:10: FutureWarning: 
 
 All support for the `google.generativeai` package has ended. It will no longer be receiving 
 updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
@@ -12,9 +12,4 @@ https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/READM
 WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on http://127.0.0.1:5000
 Press CTRL+C to quit
-127.0.0.1 - - [24/Jan/2026 19:57:41] "OPTIONS /chat HTTP/1.1" 200 -
-127.0.0.1 - - [24/Jan/2026 19:57:51] "POST /chat HTTP/1.1" 200 -
-127.0.0.1 - - [24/Jan/2026 21:43:06] "OPTIONS /chat HTTP/1.1" 200 -
-127.0.0.1 - - [24/Jan/2026 21:43:16] "POST /chat HTTP/1.1" 200 -
-127.0.0.1 - - [24/Jan/2026 21:50:19] "OPTIONS /chat HTTP/1.1" 200 -
-127.0.0.1 - - [24/Jan/2026 21:50:29] "POST /chat HTTP/1.1" 200 -
+127.0.0.1 - - [25/Jan/2026 01:55:13] "OPTIONS /chat HTTP/1.1" 200 -

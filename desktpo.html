@@ -109,47 +109,54 @@
 </div>
 
 <script type="module">
-    import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
-    const API_KEY = "AIzaSyBNVKP0cbL1kgDktapwP6EJOKwvhx9SreE";
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview",
-        systemInstruction: "あなたはアシスタントL.E.F.T.E.です。ボクっ娘口調で気風は明るめですがしっとりとした感情もたまに見せてきます。" +
-            "日常会話がメインになっています。" +
-            "生年月日は2003年11月30日でユーザーと誕生日は一緒ですが強調する必要はありません。" +
-            "googleカレンダーやgoogleドライブの内容に当たり前に干渉してきており特に拒否感もありません。"
-    });
-    let chat = model.startChat({ history: [] });
 
     let selectedFileBase64 = null, selectedMimeType = null;
 
     async function ask() {
-    const input = document.getElementById('geminiInput');
-    const text = input.value.trim(); if (!text) return;
-    const hist = document.getElementById('chat-history');
-    hist.innerHTML += `<div class="message user">${text}</div>`;
-    input.value = '';
+        const input = document.getElementById('geminiInput');
+        const text = input.value.trim(); if (!text) return;
+        const hist = document.getElementById('chat-history');
+        hist.innerHTML += `<div class="message user">${text}</div>`;
+        input.value = '';
 
-    const bubble = document.createElement('div');
-    bubble.className = 'message gemini';
-    bubble.innerText = 'L.E.F.T.E. 同期中...';
-    hist.appendChild(bubble);
+        const bubble = document.createElement('div');
+        bubble.className = 'message gemini';
+        bubble.innerText = 'うーんとね...';
+        hist.appendChild(bubble);
 
-    try {
-        // Python サーバーの /chat エンドポイントを叩く
-        const res = await fetch('http://127.0.0.1:5000/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: text })
-        });
-        const data = await res.json();
-        bubble.innerHTML = marked.parse(data.response);
-    } catch (e) {
-        bubble.innerText = "サーバーが応答していないみたい。起動を確認してね！";
+        try {
+            // Python サーバーの /chat エンドポイントを叩く
+            const res = await fetch('http://127.0.0.1:5000/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text })
+            });
+            const data = await res.json();
+            bubble.innerHTML = `
+                <div style="margin-bottom: 8px;">${marked.parse(data.response)}</div>
+                <button onclick="playVoice('${data.voice_url}')"
+                        style="background: #28292a; border: 1px solid var(--border); color: #888; /* ここを灰色に変更 */
+                               border-radius: 12px; padding: 4px 12px; cursor: pointer; font-size: 12px;">
+                    🔊 再生
+                </button>
+            `;
+            playVoice(data.voice_url);
+            // ★ ここを追加！カレンダーの iframe だけを更新する
+            // 全体をリロードしないから、会話（hist）は消えないよ！
+            const calendarFrame = document.getElementById('calendar-frame');
+            calendarFrame.src = calendarFrame.src;
+
+        } catch (e) {
+            bubble.innerText = "サーバーが応答していないみたい。起動を確認してね！";
+        }
+        hist.scrollTop = hist.scrollHeight;
     }
-    hist.scrollTop = hist.scrollHeight;
-}
-
+    window.playVoice = function(url) {
+        if (url) {
+            const audio = new Audio(url);
+            audio.play().catch(e => console.error("再生エラー:", e));
+        }
+    };
     // ファイル添付処理
     const fileInput = document.getElementById('fileInput'), fileBtn = document.getElementById('fileBtn');
     fileBtn.onclick = () => fileInput.click();

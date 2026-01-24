@@ -1,8 +1,11 @@
 import calendar_actions
 import os.path
 import drive_actions
+import re
+import requests
+import time
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request,send_file
 from flask_cors import CORS
 import google.generativeai as genai
 from google.auth.transport.requests import Request
@@ -12,6 +15,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
+
+VOICEVOX_URL = "http://127.0.0.1:50021"
 
 # 1. 権限設定（カレンダーとドライブの読み書き）
 SCOPES = [
@@ -98,16 +103,50 @@ def chat():
 
         # 3. 複数のパートに分かれている可能性も考えて、念のためテキストを結合
         full_text = "".join([part.text for part in response.parts if part.text])
+
+        voice_text = format_text_for_voice(full_text)
+
+        voice_filename = f"voice_{int(time.time())}.wav"
+        generate_voice(full_text, filename=voice_filename)
+
         latest_events = calendar_actions.list_calendar_events()
         return jsonify({
             "response": full_text,
-            "calendar_data": latest_events  # ブラウザに最新データをこっそり教える
+            "calendar_data": latest_events,
+            "voice_url": f"http://127.0.0.1:5000/get_voice/{voice_filename}"  # ファイル名をURLに含める
         })
 
     except Exception as e:
         print(f"チャット実行エラー: {e}")
         return jsonify({"response": "ごめんね、カレンダーの操作中にちょっと躓いちゃったみたい。もう一度試してみて！"})
 
+@app.route('/get_voice/<filename>')
+def get_voice(filename):
+    return send_file(filename, mimetype="audio/wav")
+
+def format_text_for_voice(text):
+    # 「15:30」のような形式を「15時30分」に置換するよ
+    formatted = re.sub(r'(\d{1,2}):(\d{2})', r'\1時\2分', text)
+    return formatted
+
+def generate_voice(text, speaker_id=8, filename="response.wav"):
+    params = {'text': text, 'speaker': speaker_id}
+    res_query = requests.post(f"{VOICEVOX_URL}/audio_query", params=params)
+    query_data = res_query.json()
+
+    # --- ここでボクの個性を調整するよ！ ---
+    query_data['speedScale'] = 1.2  # 話す速度（1.0が標準。少し速めがボクっ娘っぽいかも！）
+    query_data['pitchScale'] = 0.0  # 声の高さ（少し上げると明るくなるよ）
+    query_data['intonationScale'] = 1.4  # 抑揚（1.0以上で感情豊か、以下で淡々とした感じに）
+    query_data['volumeScale'] = 1.0  # 音量
+    # ------------------------------------
+    res_synthesis = requests.post(
+        f"{VOICEVOX_URL}/synthesis",
+        params={'speaker': speaker_id},
+        json=query_data
+    )
+    with open(filename, "wb") as f:
+        f.write(res_synthesis.content)
 
 if __name__ == '__main__':
     app.run(port=5000)

@@ -14,19 +14,29 @@ def get_drive_service():
     return None
 
 
-def list_drive_files(page_size: int = 10):
-    """Google ドライブ内のファイル名とIDのリストを取得します。"""
+def list_drive_files(page_size: int = 15):
+    """マイドライブの直下にあるファイルとフォルダをリストアップします。"""
     service = get_drive_service()
+
+    # 'root' in parents を指定することで、マイドライブの直下だけを探すようにします
+    query = "'root' in parents and trashed = false"
+
     results = service.files().list(
-        pageSize=page_size, fields="nextPageToken, files(id, name, mimeType)").execute()
+        q=query,  # 検索条件を追加
+        pageSize=page_size,
+        fields="nextPageToken, files(id, name, mimeType)"
+    ).execute()
+
     items = results.get('files', [])
 
     if not items:
-        return "ファイルは見つからなかったよ。"
+        return "マイドライブには何も見当たらないよ。"
 
-    output = "ドライブ内のファイルリストだよ：\n"
+    output = "マイドライブの直下にあるものを見つけたよ：\n"
     for item in items:
-        output += f"- {item['name']} (ID: {item['id']}, 種類: {item['mimeType']})\n"
+        # フォルダかファイルかをわかりやすくします
+        is_folder = "[フォルダ] " if item['mimeType'] == 'application/vnd.google-apps.folder' else ""
+        output += f"- {is_folder}{item['name']} (ID: {item['id']})\n"
     return output
 
 
