@@ -125,9 +125,35 @@ def chat():
 @app.route(f'/{VOICE_DIR}/<filename>')
 def serve_wav(filename): return send_from_directory(os.path.join(BASE_DIR, VOICE_DIR), filename)
 
+def get_system_instruction():
+    personality_path = os.getenv("PERSONALITY_FILE", "personality.txt")
+    # .env からユーザー名を取得（なければ「ユーザー」にする）
+    user_name = os.getenv("USER_NAME", "ユーザー")
 
+    if os.path.exists(personality_path):
+        with open(personality_path, "r", encoding="utf-8") as f:
+            personality_content = f.read()
+    else:
+        personality_content = "あなたは優秀なアシスタントです。"
+
+    # プロンプトの冒頭で「誰に話しているか」を定義する
+    return f"あなたは {user_name} のアシスタントです。\n{personality_content}\n{FUNCTIONAL_RULES}"
 @app.route('/')
-def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
+def index():
+    # .env からカレンダーIDを取得（未設定なら primary）
+    calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
+
+    try:
+        # HTMLを読み込んで、IDを置換してからブラウザに返す
+        with open(os.path.join(BASE_DIR, 'desktpo.html'), 'r', encoding='utf-8') as f:
+            html_content = f.read()
+
+        # HTML内の placeholder を .env の値に置き換える
+        html_content = html_content.replace("YOUR_CALENDAR_ID_HERE", calendar_id)
+
+        return html_content
+    except Exception as e:
+        return f"HTML読み込みエラー: {str(e)}"
 
 
 # --- lefte_server.py の末尾を修正 ---
