@@ -8,11 +8,13 @@ from datetime import datetime
 from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
+from config import SCOPES
 
 # 自作アクションのインポート
 import calendar_actions
 import drive_actions
 import search_actions
+import gmail_actions
 
 # Gemini 2026 最新 SDK
 from google import genai
@@ -43,9 +45,14 @@ tools = [
     calendar_actions.update_calendar_event,
     drive_actions.list_drive_files,
     drive_actions.read_drive_file_content,
+    gmail_actions.list_recent_emails,
     search_actions.search_web
 ]
-
+SCOPES = [
+    'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/gmail.readonly'  # 👈 これも忘れずに
+]
 
 # --- 読み上げ用クリーンアップ ---
 def clean_text_for_speech(text):

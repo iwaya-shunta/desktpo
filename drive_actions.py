@@ -3,15 +3,12 @@ import os
 from googleapiclient.http import MediaIoBaseDownload
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
-
-
+from config import SCOPES
 def get_drive_service():
     """Google Drive API への接続を確立します。"""
     if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file(
-            'token.json', ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive.readonly']
-        )
-        return build('drive', 'v3', credentials=creds)
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        return build('drive', 'v1', credentials=creds)
     return None
 
 

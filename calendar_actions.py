@@ -2,15 +2,13 @@ import datetime
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 import os
-
+from config import SCOPES
 
 def get_calendar_service():
     """Google Calendar API への接続を確立します。"""
     if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file(
-            'token.json', ['https://www.googleapis.com/auth/calendar']
-        )
-        return build('calendar', 'v3', credentials=creds)
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        return build('calendar', 'v1', credentials=creds)
     return None
 
 
