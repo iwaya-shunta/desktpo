@@ -3,7 +3,7 @@
 chcp 65001 >nul
 
 title L.E.F.T.E. Unified Server
-cd /d "C:\Users\iwaya\Documents\htt"
+cd /d %~dp0
 
 echo --------------------------------------------------
 echo [1/3] 実行中の古いプロセスを掃除しています...

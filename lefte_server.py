@@ -120,7 +120,17 @@ def serve_wav(filename): return send_from_directory(os.path.join(BASE_DIR, VOICE
 def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
 
 
+# --- lefte_server.py の末尾を修正 ---
 if __name__ == '__main__':
     setup_voice_dir()
-    cert, key = 'desktop-dlpanf4.tail456e86.ts.net.crt', 'desktop-dlpanf4.tail456e86.ts.net.key'
-    app.run(host='0.0.0.0', port=5000, ssl_context=(cert, key))
+
+    # 【修正】.env からファイル名を読み込む（なければ None になるよ）
+    cert = os.getenv("CERT_FILE")
+    key = os.getenv("KEY_FILE")
+
+    if cert and key and os.path.exists(cert):
+        print(f"🔒 HTTPS モードで起動します: {cert}")
+        app.run(host='0.0.0.0', port=5000, ssl_context=(cert, key))
+    else:
+        print("⚠️ 証明書が見つからないか未設定のため、HTTP モードで起動します。")
+        app.run(host='0.0.0.0', port=5000)
