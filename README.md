@@ -17,3 +17,15 @@
 1. `pip install -r requirements.txt` を実行。
 2. `.env.example` をコピーして `.env` を作成し、API キーを入力。
 3. `python lefte_server.py` で起動！
+
+## ⚠️ 注意事項 (Important Notes)
+
+### VOICEVOX のインストールパス
+本プロジェクトの起動スクリプト (`start_voicevox.vbs`) は、VOICEVOX がデフォルトの場所にインストールされていることを前提としています.
+- **デフォルトパス**: `C:\Program Files\VOICEVOX\vv-engine\run.exe`
+
+もし上記以外（別のドライブやフォルダ）にインストールした場合は、`start_voicevox.vbs` および `start_hidden.vbs` 内のパスを、ご自身の環境に合わせて手動で書き換えてください。
+
+### セキュリティの再確認
+- `token.json` および `credentials.json` は、セキュリティ保護のため Git の管理から外してあります。
+- 本番環境で利用する際は、必ずご自身の API キーと SSL 証明書を設定してください。
