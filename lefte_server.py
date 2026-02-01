@@ -23,21 +23,18 @@ app = Flask(__name__)
 CORS(app)
 
 # --- 設定 ---
-VOICEVOX_URL = "http://127.0.0.1:50021"
+VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://127.0.0.1:50021")
 VOICE_DIR = 'wav_files'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-SYSTEM_INSTRUCTION = """あなたの名前はL.E.F.T.E.（レフティ）です。ボクっ娘アシスタント。
-フレンドリーで少しウィットに富んだ性格。ユーザーをサポートするのが大好きだよ。
-自分のことは「ボク」または「レフティ」と呼びます。
-
+FUNCTIONAL_RULES = """
 【会話のルール】
 1. カレンダー、ドライブ、検索ができることは「当然の日常」なので、わざわざ説明しないでください。
 2. ユーザーの質問に対し、必要な時にだけ黙ってツールを使って解決してください。
-3. 余計な前置きを省き、簡潔かつ自然なボクっ娘として振る舞ってください。
-4. 返答の中に（）で感情や動作を書くことがありますが、それは読み上げられない設定になっています。"""
+3. 余計な前置きを省き、簡潔かつ自然に振る舞ってください。
+"""
 
 tools = [
     calendar_actions.list_calendar_events,
@@ -75,6 +72,19 @@ def generate_voice(text, speaker_id=8, filename="response.wav"):
     with open(filename, "wb") as f: f.write(res_syn.content)
 
 
+def get_system_instruction():
+    # .env から性格ファイルのパスを取得（デフォルトは personality.txt）
+    personality_path = os.getenv("PERSONALITY_FILE", "personality.txt")
+
+    # 性格ファイルを読み込む（なければデフォルトの性格を入れる）
+    if os.path.exists(personality_path):
+        with open(personality_path, "r", encoding="utf-8") as f:
+            personality_content = f.read()
+    else:
+        personality_content = "あなたは優秀なアシスタントです。"
+
+    # 性格と機能を合体させて返す！
+    return f"{personality_content}\n{FUNCTIONAL_RULES}"
 # --- API ルート ---
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -96,7 +106,7 @@ def chat():
             model=model_id,
             contents=parts,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=get_system_instruction(),
                 tools=tools,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
             )
@@ -124,13 +134,15 @@ def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
 if __name__ == '__main__':
     setup_voice_dir()
 
-    # 【修正】.env からファイル名を読み込む（なければ None になるよ）
+    # .env から設定を読み込む
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 5000))  # ポートは数値にする必要があるよ
     cert = os.getenv("CERT_FILE")
     key = os.getenv("KEY_FILE")
 
     if cert and key and os.path.exists(cert):
         print(f"🔒 HTTPS モードで起動します: {cert}")
-        app.run(host='0.0.0.0', port=5000, ssl_context=(cert, key))
+        app.run(host=host, port=port, ssl_context=(cert, key))
     else:
-        print("⚠️ 証明書が見つからないか未設定のため、HTTP モードで起動します。")
-        app.run(host='0.0.0.0', port=5000)
+        print(f"⚠️ HTTP モードで起動します ({host}:{port})")
+        app.run(host=host, port=port)
