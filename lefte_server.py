@@ -1,152 +1,126 @@
-import calendar_actions
-import os.path
-import drive_actions
+import os
 import re
 import requests
+import base64
 import time
-from dotenv import load_dotenv
-from flask import Flask, jsonify, request,send_file
+import glob
+from datetime import datetime
+from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
-import google.generativeai as genai
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from dotenv import load_dotenv
+
+# 自作アクションのインポート
+import calendar_actions
+import drive_actions
+import search_actions
+
+# Gemini 2026 最新 SDK
+from google import genai
+from google.genai import types
 
 load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+# --- 設定 ---
 VOICEVOX_URL = "http://127.0.0.1:50021"
+VOICE_DIR = 'wav_files'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 1. 権限設定（カレンダーとドライブの読み書き）
-SCOPES = [
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/drive.readonly'
-]
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-tools_list = [
+SYSTEM_INSTRUCTION = """あなたの名前はL.E.F.T.E.（レフティ）です。ボクっ娘アシスタント。
+フレンドリーで少しウィットに富んだ性格。ユーザーをサポートするのが大好きだよ。
+自分のことは「ボク」または「レフティ」と呼びます。
+
+【会話のルール】
+1. カレンダー、ドライブ、検索ができることは「当然の日常」なので、わざわざ説明しないでください。
+2. ユーザーの質問に対し、必要な時にだけ黙ってツールを使って解決してください。
+3. 余計な前置きを省き、簡潔かつ自然なボクっ娘として振る舞ってください。
+4. 返答の中に（）で感情や動作を書くことがありますが、それは読み上げられない設定になっています。"""
+
+tools = [
     calendar_actions.list_calendar_events,
     calendar_actions.add_calendar_event,
     calendar_actions.delete_calendar_event,
     calendar_actions.update_calendar_event,
-    drive_actions.list_drive_files,       # 追加！
-    drive_actions.read_drive_file_content
+    drive_actions.list_drive_files,
+    drive_actions.read_drive_file_content,
+    search_actions.search_web
 ]
 
-# 2. Gemini の初期設定
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-generation_config = {
-    "temperature": 0.9,
-    "top_p": 0.95,
-    "top_k": 40,
-    "max_output_tokens": 1024,
-}
 
-safety_settings = [
-    {
-        "category": "HARM_CATEGORY_HATE_SPEECH",
-        "threshold": "BLOCK_ONLY_HIGH",
-    },
-    {
-        "category": "HARM_CATEGORY_HARASSMENT",
-        "threshold": "BLOCK_ONLY_HIGH",
-    },
-]
-
-# --- 50行目付近のモデル設定も、警告が出ない形に修正 ---
-model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
-    generation_config={
-        "temperature": 0.9,
-        "top_p": 0.95,
-        "top_k": 40,
-        "max_output_tokens": 1024,
-    },
-    safety_settings=safety_settings, # ここに修正したリストを渡す
-    tools=tools_list,
-    system_instruction="""あなたはL.E.F.T.E.です。ボクっ娘アシスタント。
-ユーザーの依頼に合わせてカレンダー関数を使い分けてね。
-実行後は結果を見て明るく報告して！"""
-)
-
-chat_session = model.start_chat(history=[], enable_automatic_function_calling=True)
+# --- 読み上げ用クリーンアップ ---
+def clean_text_for_speech(text):
+    """（）や ( ) を読み飛ばすための処理"""
+    text = re.sub(r'\(.*?\)', '', text)
+    text = re.sub(r'（.*?）', '', text)
+    return text
 
 
-def get_credentials():
-    creds = None
-    if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
-    return creds
+def setup_voice_dir():
+    path = os.path.join(BASE_DIR, VOICE_DIR)
+    if not os.path.exists(path): os.makedirs(path)
+    for f in glob.glob(os.path.join(path, "*.wav")): os.remove(f)
 
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    global chat_session
-    user_input = request.json.get('message')
-
-    try:
-        # 1. ボク（Gemini）にメッセージを送信
-        response = chat_session.send_message(user_input)
-
-        # 2. もしボクが「実行」だけで満足して喋り足りない（テキストが短い）場合、
-        #    もう一度背中を押してあげます
-        if not response.text or len(response.text) < 10:
-            response = chat_session.send_message("カレンダーの結果を全部教えて！最後までボクっ娘らしく喋ってね！")
-
-        # 3. 複数のパートに分かれている可能性も考えて、念のためテキストを結合
-        full_text = "".join([part.text for part in response.parts if part.text])
-
-        voice_text = format_text_for_voice(full_text)
-
-        voice_filename = f"voice_{int(time.time())}.wav"
-        generate_voice(full_text, filename=voice_filename)
-
-        latest_events = calendar_actions.list_calendar_events()
-        return jsonify({
-            "response": full_text,
-            "calendar_data": latest_events,
-            "voice_url": f"http://127.0.0.1:5000/get_voice/{voice_filename}"  # ファイル名をURLに含める
-        })
-
-    except Exception as e:
-        print(f"チャット実行エラー: {e}")
-        return jsonify({"response": "ごめんね、カレンダーの操作中にちょっと躓いちゃったみたい。もう一度試してみて！"})
-
-@app.route('/get_voice/<filename>')
-def get_voice(filename):
-    return send_file(filename, mimetype="audio/wav")
-
-def format_text_for_voice(text):
-    # 「15:30」のような形式を「15時30分」に置換するよ
-    formatted = re.sub(r'(\d{1,2}):(\d{2})', r'\1時\2分', text)
-    return formatted
 
 def generate_voice(text, speaker_id=8, filename="response.wav"):
-    params = {'text': text, 'speaker': speaker_id}
-    res_query = requests.post(f"{VOICEVOX_URL}/audio_query", params=params)
-    query_data = res_query.json()
+    clean_text = clean_text_for_speech(text)
+    if not clean_text.strip(): clean_text = "了解だよ。"
 
-    # --- ここでボクの個性を調整するよ！ ---
-    query_data['speedScale'] = 1.2  # 話す速度（1.0が標準。少し速めがボクっ娘っぽいかも！）
-    query_data['pitchScale'] = 0.0  # 声の高さ（少し上げると明るくなるよ）
-    query_data['intonationScale'] = 1.4  # 抑揚（1.0以上で感情豊か、以下で淡々とした感じに）
-    query_data['volumeScale'] = 1.0  # 音量
-    # ------------------------------------
-    res_synthesis = requests.post(
-        f"{VOICEVOX_URL}/synthesis",
-        params={'speaker': speaker_id},
-        json=query_data
-    )
-    with open(filename, "wb") as f:
-        f.write(res_synthesis.content)
+    res_query = requests.post(f"{VOICEVOX_URL}/audio_query", params={'text': clean_text, 'speaker': speaker_id})
+    query_data = res_query.json()
+    query_data.update({'speedScale': 1.15, 'intonationScale': 1.4})
+    res_syn = requests.post(f"{VOICEVOX_URL}/synthesis", params={'speaker': speaker_id}, json=query_data)
+    with open(filename, "wb") as f: f.write(res_syn.content)
+
+
+# --- API ルート ---
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_input = data.get('message', '')
+    image_b64 = data.get('image')
+    mime_type = data.get('mime_type')
+    model_id = data.get('model', 'gemini-3-flash-preview')  # フロントから受け取る
+
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    prompt = f"【現在時刻: {now_str}】\n{user_input}"
+
+    try:
+        parts = [prompt]
+        if image_b64:
+            parts.append(types.Part.from_bytes(data=base64.b64decode(image_b64), mime_type=mime_type))
+
+        response = client.models.generate_content(
+            model=model_id,
+            contents=parts,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                tools=tools,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
+            )
+        )
+
+        full_text = response.text or "作業完了だよ！"
+        voice_filename = f"voice_{int(time.time())}.wav"
+        save_path = os.path.join(BASE_DIR, VOICE_DIR, voice_filename)
+        generate_voice(full_text, filename=save_path)
+
+        return jsonify({"response": full_text, "voice_url": f"/{VOICE_DIR}/{voice_filename}"})
+    except Exception as e:
+        return jsonify({"response": f"ごめんね、エラーになっちゃった：{str(e)}"})
+
+
+@app.route(f'/{VOICE_DIR}/<filename>')
+def serve_wav(filename): return send_from_directory(os.path.join(BASE_DIR, VOICE_DIR), filename)
+
+
+@app.route('/')
+def index(): return send_file(os.path.join(BASE_DIR, 'desktpo.html'))
+
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    setup_voice_dir()
+    cert, key = 'desktop-dlpanf4.tail456e86.ts.net.crt', 'desktop-dlpanf4.tail456e86.ts.net.key'
+    app.run(host='0.0.0.0', port=5000, ssl_context=(cert, key))

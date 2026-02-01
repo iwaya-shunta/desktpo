@@ -1,7 +1,15 @@
+# 機密情報
 .env
-token.json
-credentials.json
-voice_*.wav
-response.wav
+*.crt
+*.key
+
+# 一時ファイル
+wav_files/
 __pycache__/
-*.pyc
+.DS_Store
+
+# 仮想環境
+venv/
+.venv/
+credentials.json
+token.json

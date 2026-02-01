@@ -1,0 +1,11 @@
+{
+  "name": "L.E.F.T.E. AI",
+  "short_name": "LEFTE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#131314",
+  "theme_color": "#8ab4f8",
+  "icons": [
+    { "src": "https://cdn-icons-png.flaticon.com/512/1698/1698535.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
