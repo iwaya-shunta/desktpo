@@ -8,7 +8,7 @@
     <style>
         :root { --bg: #131314; --card: #1e1f20; --text: #e3e3e3; --accent: #8ab4f8; --border: #444746; }
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 10px; font-family: sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 90px 1fr; gap: 12px; height: 96vh; width: 100vw; overflow: hidden; }
+        body { margin: 0; padding: 10px; font-family: sans-serif; background: var(--bg); color: var(--text); display: grid; grid-template-columns: 1fr 1.2fr 1fr; grid-template-rows: 90px 1fr; gap: 12px; height: 95vh; width: 100vw; overflow: hidden; }
 
         /* パネル管理 */
         .panel { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
@@ -21,12 +21,21 @@
         #clock { font-size: 34px; font-weight: 200; margin-right: 15px; }
 
         /* チャットデザイン (Soul v5.5 準拠) */
-        #chat-history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; }
+        #chat-history { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; white-space: pre-wrap; -webkit-overflow-scrolling: touch; overflow-y: auto !important; pointer-events: auto !important; height: 100%;}
         .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.5; opacity: 0; transform: translateY(10px); transition: 0.3s ease-out; position: relative; }
         .message.show { opacity: 1; transform: translateY(0); }
         .gemini { background: #1a1a1b; border: 1px solid var(--border); align-self: flex-start; margin-left: 35px; }
         .user { background: #2b2a2a; align-self: flex-end; }
-
+        #chat-history::-webkit-scrollbar {
+            width: 6px;
+        }
+        #chat-history::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 10px;
+        }
+        #chat-history::-webkit-scrollbar-track {
+            background: transparent;
+        }
         /* AIアバター (Soul v5.5 準拠) */
         .ai-avatar { position: absolute; left: -35px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: #1a1a1b; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--accent); }
         .speaking-icon { animation: ai-breathe 1.5s infinite ease-in-out; border-color: var(--accent); }
@@ -37,7 +46,10 @@
         #geminiInput { flex: 1; background: transparent; border: none; color: white; outline: none; }
         #micBtn { background: none; border: none; color: var(--text); cursor: pointer; }
         .recording #micBtn { color: var(--accent); filter: drop-shadow(0 0 8px var(--accent)); }
-
+        #chat-panel {
+            grid-column: 2;
+            position: relative; /* 【重要】ここを基準点にする、という命令です */
+        }
         /* ラジオボタン */
         .model-selector { display: flex; background: #131314; border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
         .model-selector input { display: none; }
@@ -48,6 +60,33 @@
         .news-item { padding: 8px 0; border-bottom: 1px solid #333; line-height: 1.3; }
         .news-link { color: var(--text); text-decoration: none; font-size: 11px; display: block; }
 
+        /* スクロールボタンのスタイル */
+        .scroll-controls {
+            position: absolute;
+            right: 20px;
+            bottom: 80px; /* 入力エリアの少し上 */
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .scroll-controls button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 18px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            transition: 0.2s;
+        }
+
+        .scroll-controls button:hover {
+            background: var(--border);
+        }
         iframe { width: 100%; height: 100%; border: none; border-radius: 18px; filter: invert(90%) hue-rotate(180deg); }
 
         /* モバイル対応 (確定版) */
@@ -65,6 +104,7 @@
             .bottom-nav { display: flex !important; height: 70px !important; background: var(--card); border-top: 1px solid var(--border); justify-content: space-around; align-items: center; padding-bottom: env(safe-area-inset-bottom); flex-shrink: 0; }
             .nav-item { background: none; border: none; color: #888; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
             .nav-item.active { color: var(--accent); }
+            .scroll-controls { display: none !important;}
         }
         @media (min-width: 769px) { .bottom-nav { display: none !important; } .panel { display: flex !important; } }
     </style>
@@ -94,6 +134,21 @@
 </div>
 
 <div id="chat-panel" class="panel" style="grid-column: 2;">
+    <div class="scroll-controls">
+        <button
+            onmousedown="startScroll(-15)"
+            onmouseup="stopScroll()"
+            onmouseleave="stopScroll()"
+            ontouchstart="startScroll(-15)"
+            ontouchend="stopScroll()">▲</button>
+
+        <button
+            onmousedown="startScroll(15)"
+            onmouseup="stopScroll()"
+            onmouseleave="stopScroll()"
+            ontouchstart="startScroll(15)"
+            ontouchend="stopScroll()">▼</button>
+    </div>
     <div class="widget" style="flex: 1; padding: 0;">
         <div id="chat-history"></div>
         <div id="preview-container" style="padding:10px; border-top:1px solid var(--border); display:none;"></div>
@@ -109,7 +164,7 @@
     <input type="file" id="fileInput" style="display:none;">
 </div>
 
-<div class="calendar-container" class="panel" style="grid-column: 3;">
+<div id="calendar-panel" class="panel calendar-container" style="grid-column: 3;">
     <iframe src="https://calendar.google.com/calendar/embed?src=YOUR_CALENDAR_ID_HERE&ctz=Asia%2FTokyo"
             style="border: 0" width="100%" height="100%" frameborder="0" scrolling="no"></iframe>
 </div>
@@ -122,20 +177,83 @@
 
 <script>
     let selectedFileBase64 = null, selectedMimeType = null;
+    const chatHistory = document.getElementById('chat-history');
 
-    // 時計・ニュース・天気
-    setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'}); }, 1000);
-    fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja`).then(r=>r.json()).then(d=>document.getElementById('news-container').innerHTML = d.items.slice(0, 10).map(i => `<div class="news-item"><a href="${i.link}" target="_blank" class="news-link">${i.title}</a></div>`).join(''));
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=34.3796&longitude=132.4026&current_weather=true`).then(r=>r.json()).then(d=>document.getElementById('weather').innerText = `${Math.round(d.current_weather.temperature)}°C`);
+    chatHistory.addEventListener('wheel', (e) => {
+        // デフォルトのスクロール動作が効かない場合でも、jsでscrollTopを操作
+        chatHistory.scrollTop += e.deltaY;
 
+        // イベントがWindows側に「貫通」しないように止める
+        e.preventDefault();
+    }, { passive: false });
+    // 時計・ニュース・天気の設定
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString('ja-JP', {hour:'2-digit', minute:'2-digit'});
+    }, 1000);
+
+    fetch(`https://api.rss2json.com/v1/api.json?rss_url=https://news.google.com/rss?hl=ja&gl=JP&ceid=JP:ja`)
+        .then(r=>r.json())
+        .then(d=>document.getElementById('news-container').innerHTML = d.items.slice(0, 10).map(i => `<div class="news-item"><a href="${i.link}" target="_blank" class="news-link">${i.title}</a></div>`).join(''));
+
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=34.3796&longitude=132.4026&current_weather=true`)
+        .then(r=>r.json())
+        .then(d=>document.getElementById('weather').innerText = `${Math.round(d.current_weather.temperature)}°C`);
+
+    // タブ切り替え
     window.switchTab = function(t, e) {
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active-panel'));
+        document.querySelectorAll('.panel').forEach(p => {
+            p.style.display = 'none';
+            p.classList.remove('active-panel');
+        });
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-        document.getElementById(t + '-panel').classList.add('active-panel');
+        const target = document.getElementById(t + '-panel');
+        if (target) {
+            target.style.display = 'flex';
+            target.classList.add('active-panel');
+        }
         if (e) e.currentTarget.classList.add('active');
     };
     if (window.innerWidth <= 768) switchTab('chat');
 
+    // --- メッセージを画面に追加する共通関数 ---
+    function addMessageToUI(role, text, isHistory = false) {
+        const hist = document.getElementById('chat-history');
+        const bubble = document.createElement('div');
+
+        // DBの 'assistant' を CSSクラスの 'gemini' に変換
+        const displayRole = role === 'assistant' ? 'gemini' : 'user';
+        bubble.className = `message ${displayRole} show`;
+
+        if (displayRole === 'gemini') {
+            // Markdownを解析して表示
+            const content = marked.parse(text);
+            bubble.innerHTML = `<div class="ai-avatar">L</div><div class="res-txt">${content}</div>`;
+        } else {
+            bubble.innerText = text;
+        }
+
+        hist.appendChild(bubble);
+        hist.scrollTop = hist.scrollHeight;
+        return bubble;
+    }
+
+    // --- 履歴の読み込み ---
+    async function loadHistory() {
+        try {
+            const response = await fetch('/history');
+            const history = await response.json();
+            const chatHistoryDiv = document.getElementById('chat-history');
+            chatHistoryDiv.innerHTML = ''; // 一旦クリア
+
+            history.forEach(msg => {
+                addMessageToUI(msg.role, msg.content, true);
+            });
+        } catch (e) {
+            console.error("履歴の読み込みに失敗しちゃった：", e);
+        }
+    }
+
+    // タイプライター演出付きの応答表示
     async function runTypewriter(el, fullTxt, url) {
         const displayTxt = fullTxt.replace(/\(.*\)/g, '').replace(/（.*）/g, '');
         let i = 0; el.innerHTML = "";
@@ -146,40 +264,82 @@
         audio.play();
         return new Promise(res => {
             function type() {
-                if (i < displayTxt.length) { el.innerText += displayTxt.charAt(i); i++; setTimeout(type, 30); }
-                else { el.innerHTML = marked.parse(displayTxt); res(); }
+                if (i < displayTxt.length) {
+                    el.innerText += displayTxt.charAt(i); i++;
+                    setTimeout(type, 30);
+                } else {
+                    el.innerHTML = marked.parse(displayTxt);
+                    res();
+                }
                 const h = document.getElementById('chat-history'); h.scrollTop = h.scrollHeight;
             }
             type();
         });
     }
 
+    // メッセージ送信
     async function ask() {
         const input = document.getElementById('geminiInput');
         const text = input.value.trim();
-        const hist = document.getElementById('chat-history');
         const model = document.querySelector('input[name="modelSelect"]:checked').value;
         if (!text && !selectedFileBase64) return;
+
         const f64 = selectedFileBase64; const mime = selectedMimeType;
-        selectedFileBase64 = null; document.getElementById('preview-container').style.display = 'none';
+        selectedFileBase64 = null;
+        document.getElementById('preview-container').style.display = 'none';
 
-        if (f64) hist.innerHTML += `<div class="message user show" style="background:transparent; padding:0; align-self:flex-end;"><img src="data:${mime};base64,${f64}" style="max-width:280px; border-radius:15px;"></div>`;
-        if (text) hist.innerHTML += `<div class="message user show">${text}</div>`;
-        input.value = ''; hist.scrollTop = hist.scrollHeight;
+        // ユーザーのメッセージを表示
+        if (f64) {
+            const hist = document.getElementById('chat-history');
+            hist.innerHTML += `<div class="message user show" style="background:transparent; padding:0; align-self:flex-end;"><img src="data:${mime};base64,${f64}" style="max-width:280px; border-radius:15px;"></div>`;
+        }
+        if (text) addMessageToUI('user', text);
+        input.value = '';
 
-        const bubble = document.createElement('div');
-        bubble.className = 'message gemini';
-        bubble.innerHTML = `<div class="ai-avatar">L</div><div class="res-txt">...</div>`;
-        hist.appendChild(bubble);
-        setTimeout(() => bubble.classList.add('show'), 10);
+        // AIの「...」表示
+        const bubble = addMessageToUI('assistant', '...');
+        const resTxtElement = bubble.querySelector('.res-txt');
 
         try {
-            const res = await fetch('/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message: text, image: f64, mime_type: mime, model: model }) });
+            const res = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text, image: f64, mime_type: mime, model: model })
+            });
             const data = await res.json();
-            await runTypewriter(bubble.querySelector('.res-txt'), data.response, data.voice_url);
-        } catch (e) { bubble.innerText = "エラーだよ..."; }
+            await runTypewriter(resTxtElement, data.response, data.voice_url);
+        } catch (e) {
+            resTxtElement.innerText = "エラーになっちゃった...";
+        }
     }
 
+        let scrollInterval = null;
+
+    // スクロールを開始する（連続処理）
+    function startScroll(amount) {
+        const chatHistory = document.getElementById('chat-history');
+        if (!chatHistory) return;
+
+        // 最初に1回動かす
+        chatHistory.scrollBy({ top: amount, behavior: 'auto' });
+
+        // 一定間隔（30ミリ秒ごと）でスクロールを繰り返す
+        scrollInterval = setInterval(() => {
+            chatHistory.scrollBy({ top: amount, behavior: 'auto' });
+        }, 30);
+    }
+
+    // スクロールを止める
+    function stopScroll() {
+        if (scrollInterval) {
+            clearInterval(scrollInterval);
+            scrollInterval = null;
+        }
+    }
+    // ページロード時の処理を統合
+    window.addEventListener('DOMContentLoaded', loadHistory);
+
+    // イベント設定
     const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     rec.lang = 'ja-JP';
     document.getElementById('micBtn').onclick = () => { rec.start(); document.body.classList.add('recording'); };

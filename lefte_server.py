@@ -9,6 +9,7 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 from config import SCOPES
+from chat_storage import init_db, save_message, get_all_history
 
 # 自作アクションのインポート
 import calendar_actions
@@ -36,6 +37,8 @@ FUNCTIONAL_RULES = """
 1. カレンダー、ドライブ、検索ができることは「当然の日常」なので、わざわざ説明しないでください。
 2. ユーザーの質問に対し、必要な時にだけ黙ってツールを使って解決してください。
 3. 余計な前置きを省き、簡潔かつ自然に振る舞ってください。
+4. 箇条書き（リスト形式）で情報を提示する際は、必ず各項目の間に改行を入れ、1行1項目として表示してください。
+5. 項目が複数ある場合は、視認性を高めるために適切な空白行（ダブル改行）を挟んでも構いません。
 """
 
 tools = [
@@ -53,6 +56,8 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/gmail.readonly'  # 👈 これも忘れずに
 ]
+
+init_db()
 
 # --- 読み上げ用クリーンアップ ---
 def clean_text_for_speech(text):
@@ -93,25 +98,64 @@ def get_system_instruction():
     # 性格と機能を合体させて返す！
     return f"{personality_content}\n{FUNCTIONAL_RULES}"
 # --- API ルート ---
+
+@app.route('/history', methods=['GET'])
+def history():
+    # データベースから全履歴を取得してフロントに返す
+    rows = get_all_history()
+    history_data = [{"role": row[1], "content": row[2]} for row in rows]
+    return jsonify(history_data)
+
+
+@app.route('/history', methods=['GET'])
+def get_history_api():
+    # SQLiteから全履歴を取得
+    rows = get_all_history()
+    # フロントエンドが扱いやすいJSON形式に変換
+    history = [{"role": r[1], "content": r[2]} for r in rows]
+    return jsonify(history)
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_input = data.get('message', '')
     image_b64 = data.get('image')
     mime_type = data.get('mime_type')
-    model_id = data.get('model', 'gemini-3-flash-preview')  # フロントから受け取る
+    model_id = data.get('model', 'gemini-3-flash-preview')
 
-    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    prompt = f"【現在時刻: {now_str}】\n{user_input}"
+    # 1. ユーザー入力をDBに保存（ここは既存のままでOK）
+    save_message('user', user_input)
 
     try:
-        parts = [prompt]
-        if image_b64:
-            parts.append(types.Part.from_bytes(data=base64.b64decode(image_b64), mime_type=mime_type))
+        # --- 2. 過去の履歴をGeminiが理解できる形式に整形する ---
+        past_rows = get_all_history()
+        contents = []
 
+        # 直近10件を取得
+        for row in past_rows[-10:]:
+            # DBの 'assistant' を Gemini用の 'model' に変換
+            role = "user" if row[1] == "user" else "model"
+            # 各パートを dict 形式（{"text": ...}）にする
+            contents.append({
+                "role": role,
+                "parts": [{"text": row[2]}]
+            })
+
+        # --- 3. 今回の入力（テキスト＋画像）を組み立てる ---
+        now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        current_user_parts = [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]
+
+        if image_b64:
+            current_user_parts.append(
+                types.Part.from_bytes(data=base64.b64decode(image_b64), mime_type=mime_type)
+            )
+
+        # 今回の入力を履歴の最後に追加
+        contents.append({"role": "user", "parts": current_user_parts})
+
+        # --- 4. Gemini API 呼び出し ---
         response = client.models.generate_content(
             model=model_id,
-            contents=parts,
+            contents=contents,  # 整形した contents を渡す
             config=types.GenerateContentConfig(
                 system_instruction=get_system_instruction(),
                 tools=tools,
@@ -120,14 +164,18 @@ def chat():
         )
 
         full_text = response.text or "作業完了だよ！"
+        save_message('assistant', full_text)
+
+        # 音声生成（save_path などの修正が済んでいる前提です）
         voice_filename = f"voice_{int(time.time())}.wav"
         save_path = os.path.join(BASE_DIR, VOICE_DIR, voice_filename)
         generate_voice(full_text, filename=save_path)
 
         return jsonify({"response": full_text, "voice_url": f"/{VOICE_DIR}/{voice_filename}"})
-    except Exception as e:
-        return jsonify({"response": f"ごめんね、エラーになっちゃった：{str(e)}"})
 
+    except Exception as e:
+        print(f"Error detail: {e}")  # コンソールに詳細を出す
+        return jsonify({"response": f"エラーになっちゃった：{str(e)}"})
 
 @app.route(f'/{VOICE_DIR}/<filename>')
 def serve_wav(filename): return send_from_directory(os.path.join(BASE_DIR, VOICE_DIR), filename)

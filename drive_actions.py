@@ -8,7 +8,7 @@ def get_drive_service():
     """Google Drive API への接続を確立します。"""
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-        return build('drive', 'v1', credentials=creds)
+        return build('drive', 'v3', credentials=creds)
     return None
 
 
@@ -32,6 +32,25 @@ def list_drive_files(folder_id: str = 'root', max_results: int = 10):
     res = [f"ID: {i['id']} | 名前: {i['name']} | タイプ: {i['mimeType']}" for i in items]
     return "\n".join(res)
 
+
+def search_drive_file(filename: str):
+    service = get_drive_service()
+    if not service: return "認証エラーだよ。"
+
+    # 'contains' を使うことで、一部が合っていれば見つけられるようにする
+    query = f"name contains '{filename}' and trashed = false"
+
+    results = service.files().list(
+        q=query,
+        pageSize=10,
+        fields="files(id, name, mimeType)"
+    ).execute()
+
+    items = results.get('files', [])
+    if not items: return f"'{filename}' という名前のファイルは見つからなかったよ。"
+
+    res = [f"ID: {i['id']} | 名前: {i['name']}" for i in items]
+    return "\n".join(res)
 
 def read_drive_file_content(file_id: str):
     """
