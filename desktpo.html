@@ -2,6 +2,13 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <link rel="manifest" href="/static/manifest.json">
+
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+
+<meta name="theme-color" content="#131314">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>L.E.F.T.E. v5.5.1 Master</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -397,6 +404,14 @@
                 switchTab(tabs[currentIndex + 1]);
             }
         }
+    }
+    // サービスワーカーの登録（PWA化に必須）
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('L.E.F.T.E. Service Worker 準備完了！', reg))
+                .catch(err => console.log('サービスワーカー登録失敗...', err));
+        });
     }
 </script>
 </body>

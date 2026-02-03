@@ -210,7 +210,15 @@ def index():
     except Exception as e:
         return f"HTML読み込みエラー: {str(e)}"
 
+from flask import send_from_directory
 
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory('.', 'manifest.json')
+
+@app.route('/service-worker.js')
+def serve_sw():
+    return send_from_directory('.', 'service-worker.js')
 # --- lefte_server.py の末尾を修正 ---
 if __name__ == '__main__':
     setup_voice_dir()
