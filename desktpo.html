@@ -356,6 +356,48 @@
             document.getElementById('preview-container').style.display = 'block';
         }; r.readAsDataURL(f);
     };
+    // スワイプ検知用の変数
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    // タブの順番を定義
+    const tabs = ['news', 'chat', 'calendar'];
+
+    // スワイプ操作を監視する
+    window.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, false);
+
+    window.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+        const swipeDistance = touchEndX - touchStartX;
+        const threshold = 70; // スワイプと判定する距離（ピクセル）
+
+        // 現在のアクティブなタブを探す
+        const currentTabElement = document.querySelector('.nav-item.active');
+        if (!currentTabElement) return;
+
+        // 現在のタブ名を取得（onclickの中身から抽出）
+        const onClickAttr = currentTabElement.getAttribute('onclick');
+        const currentTab = tabs.find(t => onClickAttr.includes(t));
+        const currentIndex = tabs.indexOf(currentTab);
+
+        if (swipeDistance > threshold) {
+            // 右にスワイプ ＝ 前のタブへ
+            if (currentIndex > 0) {
+                switchTab(tabs[currentIndex - 1]);
+            }
+        } else if (swipeDistance < -threshold) {
+            // 左にスワイプ ＝ 次のタブへ
+            if (currentIndex < tabs.length - 1) {
+                switchTab(tabs[currentIndex + 1]);
+            }
+        }
+    }
 </script>
 </body>
 </html>
