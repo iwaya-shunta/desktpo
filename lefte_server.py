@@ -83,20 +83,6 @@ def generate_voice(text, speaker_id=8, filename="response.wav"):
     res_syn = requests.post(f"{VOICEVOX_URL}/synthesis", params={'speaker': speaker_id}, json=query_data)
     with open(filename, "wb") as f: f.write(res_syn.content)
 
-
-def get_system_instruction():
-    # .env から性格ファイルのパスを取得（デフォルトは personality.txt）
-    personality_path = os.getenv("PERSONALITY_FILE", "personality.txt")
-
-    # 性格ファイルを読み込む（なければデフォルトの性格を入れる）
-    if os.path.exists(personality_path):
-        with open(personality_path, "r", encoding="utf-8") as f:
-            personality_content = f.read()
-    else:
-        personality_content = "あなたは優秀なアシスタントです。"
-
-    # 性格と機能を合体させて返す！
-    return f"{personality_content}\n{FUNCTIONAL_RULES}"
 # --- API ルート ---
 
 @app.route('/history', methods=['GET'])
@@ -106,14 +92,6 @@ def history():
     history_data = [{"role": row[1], "content": row[2]} for row in rows]
     return jsonify(history_data)
 
-
-@app.route('/history', methods=['GET'])
-def get_history_api():
-    # SQLiteから全履歴を取得
-    rows = get_all_history()
-    # フロントエンドが扱いやすいJSON形式に変換
-    history = [{"role": r[1], "content": r[2]} for r in rows]
-    return jsonify(history)
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
