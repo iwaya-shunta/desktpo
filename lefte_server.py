@@ -38,7 +38,7 @@ FUNCTIONAL_RULES = """
 2. ユーザーの質問に対し、必要な時にだけ黙ってツールを使って解決してください。
 3. 余計な前置きを省き、簡潔かつ自然に振る舞ってください。
 4. 箇条書き（リスト形式）で情報を提示する際は、必ず各項目の間に改行を入れ、1行1項目として表示してください。
-5. 項目が複数ある場合は、視認性を高めるために適切な空白行（ダブル改行）を挟んでも構いません。
+5. 文章で改行する際には1行分だけ改行をするようにしてください。
 """
 
 tools = [
@@ -50,11 +50,6 @@ tools = [
     drive_actions.read_drive_file_content,
     gmail_actions.list_recent_emails,
     search_actions.search_web
-]
-SCOPES = [
-    'https://www.googleapis.com/auth/calendar',
-    'https://www.googleapis.com/auth/drive.readonly',
-    'https://www.googleapis.com/auth/gmail.readonly'  # 👈 これも忘れずに
 ]
 
 init_db()
