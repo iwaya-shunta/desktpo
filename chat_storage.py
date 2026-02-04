@@ -63,6 +63,24 @@ def get_all_history():
     conn.close()
     return history
 
+# chat_storage.py の末尾付近に追加
+def get_today_history():
+    """今日の日付の履歴だけを取得します。"""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        # SQLの date関数を使って、今日（localtime）のデータだけを抽出
+        cursor.execute('''
+            SELECT timestamp, role, content FROM messages 
+            WHERE date(timestamp, 'localtime') = date('now', 'localtime') 
+            ORDER BY timestamp ASC
+        ''')
+        history = cursor.fetchall()
+        conn.close()
+        return history
+    except Exception as e:
+        print(f"Error fetching today history: {e}")
+        return []
 
 # スクリプトを直接実行した時のテスト動作
 if __name__ == '__main__':

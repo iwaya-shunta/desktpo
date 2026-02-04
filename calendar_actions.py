@@ -8,7 +8,7 @@ def get_calendar_service():
     """Google Calendar API への接続を確立します。"""
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-        return build('calendar', 'v1', credentials=creds)
+        return build('calendar', 'v3', credentials=creds)
     return None
 
 

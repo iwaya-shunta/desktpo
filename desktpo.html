@@ -289,6 +289,15 @@
                 body: JSON.stringify({ message: text, image: f64, mime_type: mime, model: model })
             });
             const data = await res.json();
+            // 🚀 起動信号が含まれているかチェック
+            if (data.response.includes("🚀LAUNCH_SIGNAL:")) {
+                const protocolUrl = data.response.split("🚀LAUNCH_SIGNAL:")[1].trim();
+                // ブラウザでカスタムURLを開く（Windowsのレジストリが反応する）
+                window.location.href = protocolUrl;
+
+                // 画面上の表示からは信号を消して、綺麗なメッセージにする
+                data.response = "了解だよ！アプリを起動するね。";
+            }
             await runTypewriter(resTxtElement, data.response, data.voice_url);
         } catch (e) { resTxtElement.innerText = "エラーになっちゃった..."; }
     }
