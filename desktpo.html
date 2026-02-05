@@ -231,13 +231,30 @@
     }
 
     async function loadHistory() {
-        try {
-            const response = await fetch('/history');
-            const history = await response.json();
-            document.getElementById('chat-history').innerHTML = '';
-            history.forEach(msg => addMessageToUI(msg.role, msg.content));
-        } catch (e) { console.error(e); }
+    try {
+        const response = await fetch('/history');
+        if (!response.ok) return;
+
+        const history = await response.json();
+        const chatHistoryElement = document.getElementById('chat-history');
+
+        // 🚀 重要：一度画面をクリアしてから、取得した履歴を 1 つずつ追加する
+        chatHistoryElement.innerHTML = '';
+
+        history.forEach(msg => {
+            // role が 'user' か 'assistant' かで判定
+            addMessageToUI(msg.role, msg.content);
+        });
+
+        // 最後に一番下までスクロール
+        chatHistoryElement.scrollTop = chatHistoryElement.scrollHeight;
+    } catch (error) {
+        console.error("履歴の読み込み中にエラーが発生しました:", error);
     }
+}
+
+// 🚀 ページが読み込まれたら履歴を取得する
+document.addEventListener('DOMContentLoaded', loadHistory);
 
     async function runTypewriter(el, fullTxt, url) {
         const displayTxt = fullTxt.replace(/\(.*\)/g, '').replace(/（.*）/g, '');
@@ -309,9 +326,7 @@
         scrollInterval = setInterval(() => { chatHistory.scrollBy({ top: amount, behavior: 'auto' }); }, 30);
     }
     function stopScroll() { if (scrollInterval) { clearInterval(scrollInterval); scrollInterval = null; } }
-
-    window.addEventListener('DOMContentLoaded', loadHistory);
-
+    
     // 音声認識
     const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
     rec.lang = 'ja-JP';

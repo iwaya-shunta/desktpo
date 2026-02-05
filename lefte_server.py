@@ -43,6 +43,22 @@ tools = [
 
 chat_storage.init_db()
 
+
+def get_system_instruction():
+    """personality.txt から性格設定を読み込む"""
+    # .env で指定がない場合は personality.txt を探す
+    personality_path = os.getenv("PERSONALITY_FILE", "personality.txt")
+    full_path = os.path.join(BASE_DIR, personality_path)
+
+    if os.path.exists(full_path):
+        with open(full_path, "r", encoding="utf-8") as f:
+            personality = f.read()
+    else:
+        # ファイルがない場合の予備
+        personality = "あなたは助手の L.E.F.T.E. です。"
+
+    return f"{personality}\n{FUNCTIONAL_RULES}"
+
 def generate_voice(text, speaker_id=8, filename="response.wav"):
     clean_text = re.sub(r'\(.*?\)|（.*?）', '', text)
     if not clean_text.strip(): clean_text = "了解だよ。"
@@ -60,23 +76,29 @@ def serve_wav(filename):
     """音声ファイルを配信するルート（404対策）"""
     return send_from_directory(os.path.join(BASE_DIR, VOICE_DIR), filename)
 
+
 @app.route('/chat', methods=['POST'])
 def chat():
     data = request.json
     user_input = data.get('message', '')
+
+    # 1. ユーザーの発言を保存
     chat_storage.save_message('user', user_input)
 
     try:
+        # 文脈作成
         past_rows = chat_storage.get_today_history()
-        contents = [{"role": ("user" if r[1]=="user" else "model"), "parts": [{"text": r[2]}]} for r in past_rows[-10:]]
+        contents = [{"role": ("user" if r[1] == "user" else "model"), "parts": [{"text": r[2]}]} for r in
+                    past_rows[-10:]]
         now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         contents.append({"role": "user", "parts": [{"text": f"【現在時刻: {now_str}】\n{user_input}"}]})
 
+        # Gemini 呼び出し
         response = client.models.generate_content(
             model=data.get('model', 'gemini-2.0-flash-exp'),
             contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=f"あなたは助手の L.E.F.T.E. です。\n{FUNCTIONAL_RULES}",
+                system_instruction=get_system_instruction(),
                 tools=tools, automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=False)
             )
         )
@@ -84,7 +106,7 @@ def chat():
         full_text = response.text or "完了だよ。"
         launch_url = None
 
-        # 🚀 信号の抜き出し
+        # 🚀 信号の抜き出しとテキストのクリーニング
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'text') and part.text and "🚀LAUNCH_SIGNAL:" in part.text:
                 launch_url = part.text.split("🚀LAUNCH_SIGNAL:")[1].strip()
@@ -93,21 +115,25 @@ def chat():
                 if isinstance(res_val, str) and "🚀LAUNCH_SIGNAL:" in res_val:
                     launch_url = res_val.split("🚀LAUNCH_SIGNAL:")[1].strip()
 
+        # 表示用テキストから信号を消す
         if launch_url and "🚀LAUNCH_SIGNAL:" in full_text:
             full_text = full_text.split("🚀LAUNCH_SIGNAL:")[0].strip()
 
-        # --- 修正：ここできちんと変数を定義 ---
+        # --- 🚀 ここで AI の返答を 1 回だけ保存！ ---
+        chat_storage.save_message('assistant', full_text)
+        print(f"DEBUG: AIの返答をDBに書き込みました: {full_text[:15]}...")
+
+        # 音声生成
         voice_filename = f"v_{int(time.time())}.wav"
         save_path = os.path.join(BASE_DIR, VOICE_DIR, voice_filename)
         generate_voice(full_text, filename=save_path)
 
-        chat_storage.save_message('assistant', full_text)
-
         return jsonify({
             "response": full_text,
-            "voice_url": f"/wav_files/{voice_filename}", # パスをルートに合わせる
+            "voice_url": f"/wav_files/{voice_filename}",
             "launch_url": launch_url
         })
+
     except Exception as e:
         print(f"Chat error: {e}")
         return jsonify({"response": f"エラー：{str(e)}"})
@@ -116,6 +142,25 @@ def chat():
 def index():
     with open(os.path.join(BASE_DIR, 'desktpo.html'), 'r', encoding='utf-8') as f:
         return f.read().replace("YOUR_CALENDAR_ID_HERE", os.getenv("GOOGLE_CALENDAR_ID", "primary"))
+
+@app.route('/history', methods=['GET'])
+def history_api():
+    """過去の履歴を取得してフロントに返す"""
+    try:
+        rows = chat_storage.get_today_history()
+        return jsonify([{"role": r[1], "content": r[2]} for r in rows])
+    except Exception as e:
+        print(f"History error: {e}")
+        return jsonify([])
+
+@app.route('/service-worker.js')
+def serve_sw():
+    """PWA用のサービスワーカーを配信"""
+    return send_from_directory(BASE_DIR, 'service-worker.js')
+
+@app.route('/manifest.json')
+def serve_manifest():
+    return send_from_directory(BASE_DIR, 'manifest.json')
 
 if __name__ == '__main__':
     cert_file = os.getenv("CERT_FILE")

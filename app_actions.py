@@ -1,7 +1,8 @@
 import sqlite3
 import os
 
-DB_NAME = 'chat_history.db'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, 'chat_history.db')
 
 def init_apps_table():
     conn = sqlite3.connect(DB_NAME)
@@ -21,15 +22,21 @@ def register_app(app_name: str, exe_path: str):
     conn.close()
     return f"了解だよ！『{app_name}』を登録したから、いつでも起動できるよ。"
 
+
 def launch_app(app_name: str):
-    """指定されたアプリ名から、Windows側で実行するためのカスタムURLを返します。"""
+    """パスではなく『アプリ名』だけをURLに含める"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT exe_path FROM apps WHERE app_name = ?", (app_name,))
+    # 登録されているか確認
+    c.execute("SELECT app_name FROM apps WHERE app_name = ?", (app_name,))
     row = c.fetchone()
     conn.close()
+
     if row:
-        return f"🚀LAUNCH_SIGNAL:lefte-launch://{row[0]}"
+        # 🚀 組み立てをシンプルにする: lefte-launch://メモ帳
+        # これなら記号( : )や空白に悩まされることはありません
+        return f"🚀LAUNCH_SIGNAL:lefte-launch://{app_name}"
+
     return f"ごめんね、『{app_name}』はまだ登録されていないみたい。"
 
 init_apps_table()
