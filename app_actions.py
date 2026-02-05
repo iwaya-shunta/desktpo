@@ -1,3 +1,4 @@
+# app_actions.py
 import sqlite3
 import os
 
@@ -22,15 +23,15 @@ def register_app(app_name: str, exe_path: str):
     return f"了解だよ！『{app_name}』を登録したから、いつでも起動できるよ。"
 
 def launch_app(app_name: str):
-    """パスを直接送らず、名前だけをプロトコルに載せる"""
+    """パスを直接送らず、DBに登録された名前だけをプロトコルに載せる"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT app_name FROM apps WHERE app_name = ?", (app_name,))
     row = c.fetchone()
     conn.close()
     if row:
-        # 🚀 パス（C:/...）ではなく名前（メモ帳）を投げる
-        return f"🚀LAUNCH_SIGNAL:lefte-launch://{app_name}"
+        # 🚀 重要：パス(C:/...)ではなく名前(メモ帳)だけを投げる
+        return f"🚀LAUNCH_SIGNAL:lefte-launch://{app_name}" # ここを修正
     return f"ごめんね、『{app_name}』はまだ登録されていないみたい。"
 
 init_apps_table()

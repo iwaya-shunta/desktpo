@@ -1,31 +1,39 @@
+# windows_launcher_setup.py
 import winreg
 import sys
+import sqlite3
 import os
 import urllib.parse
-import ctypes  # 先頭で1回だけインポート
+import ctypes
 
-# launch_app 関数
+# 🚀 DBの場所を絶対パスで指定（サーバーと同じ場所を指すように）
+DB_PATH = r"C:\Users\iwaya\Documents\htt\chat_history.db"
+
+
 def launch_app(url):
-    import ctypes
-    # 🚀 1. そもそもOSから何を受け取ったか、即座に表示させる
-    ctypes.windll.user32.MessageBoxW(0, f"受信した生データ:\n{url}", "DEBUG 1", 64)
+    # 1. 名前を抽出 (lefte-launch://メモ帳 -> メモ帳)
+    app_name = urllib.parse.unquote(url.replace("lefte-launch://", "").rstrip("/"))
 
-    path = url.replace("lefte-launch://", "").rstrip("/")
-    path = urllib.parse.unquote(path)
+    # 2. DBから本当のパスを引く
+    # 🚀 DBの絶対パスを指定してください
+    DB_PATH = r"C:\Users\iwaya\Documents\htt\chat_history.db"
 
-    # 🚀 2. 加工後のパスを表示させる
-    if len(path) > 1 and path[1] == '/' and path[0].isalpha():
-        path = path[0] + ":" + path[1:]
-
-    clean_path = os.path.normpath(path)
-    ctypes.windll.user32.MessageBoxW(0, f"最終的なパス:\n{clean_path}", "DEBUG 2", 64)
-
-    # 🚀 3. 起動を試みる
     try:
-        os.startfile(clean_path)
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT exe_path FROM apps WHERE app_name = ?", (app_name,))
+        row = c.fetchone()
+        conn.close()
+
+        if row:
+            # 3. 本物のパスで起動！
+            os.startfile(os.path.normpath(row[0]))
+        else:
+            ctypes.windll.user32.MessageBoxW(0, f"『{app_name}』は未登録です", "Error", 16)
     except Exception as e:
-        ctypes.windll.user32.MessageBoxW(0, f"起動エラー:\n{str(e)}", "DEBUG ERROR", 16)
-# セットアップ処理
+        ctypes.windll.user32.MessageBoxW(0, f"エラー:\n{str(e)}", "DEBUG ERROR", 16)
+
+
 def setup():
     executable = sys.executable
     script_path = os.path.abspath(__file__)
@@ -37,6 +45,7 @@ def setup():
         with winreg.CreateKey(key, r"shell\open\command") as cmd_key:
             winreg.SetValue(cmd_key, "", winreg.REG_SZ, command)
     print("✅ レジストリ登録を更新しました！")
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

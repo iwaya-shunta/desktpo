@@ -23,13 +23,22 @@
         .news-link, .news-link:visited {
             color: #bbb !important; /* デフォルトの文字色を少し落ち着いたグレーに */
             text-decoration: none;
-            font-size: 11px;
+            font-size: 14px;
             display: block;
             padding: 8px 10px;
             transition: all 0.2s;
             border-radius: 8px;
         }
+        /* ウィジェット内の iframe が枠いっぱいに広がるようにする */
+        .widget iframe {
+            border: none;
+            border-radius: 18px;
+            /* カレンダー以外の iframe（地図など）は反転させない */
+        }
 
+        #weather-map {
+            filter: none; /* カレンダーに適用されている invert フィルタを解除 */
+        }
         .news-link:hover {
             background: rgba(255, 255, 255, 0.1) !important; /* ホバー背景を薄いグレーに */
             color: #fff !important; /* 文字を白く浮かび上がらせる */

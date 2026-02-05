@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 
 load_dotenv()
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='', static_folder='static')
 CORS(app)
 
 VOICEVOX_URL = os.getenv("VOICEVOX_URL", "http://127.0.0.1:50021")
@@ -156,7 +156,7 @@ def history_api():
 @app.route('/service-worker.js')
 def serve_sw():
     """PWA用のサービスワーカーを配信"""
-    return send_from_directory(BASE_DIR, 'service-worker.js')
+    return send_from_directory(BASE_DIR, 'static/service-worker.js')
 
 @app.route('/manifest.json')
 def serve_manifest():
